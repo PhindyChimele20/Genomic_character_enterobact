@@ -4,19 +4,18 @@
 
 ## 1. Data sources
 
-This task is based on on publicly available sequencing data from the study "Genomic characterization of Enterobacter sp. PGRG2 and Achromobacter insolitus PGRG5: bacterial strains isolated from soil present near electronics manufacture industry for heavy metal remediation" which focused on understanding the gene expression of Saccharolobus islandicus relative to its different cell-cycle stages. Cultures of S. islandicus were made to begin the cell cycle at once by a 6-hour treatment with acetic acid. Whole genome sequencing was done on both extracted strains where a sequencing library with paired-end reads (2 × 150 bp) was created and subsequently subjected to sequencing on the NovaSeq 6000 platform provided by Illumina (3).
-The subsampled FASTQs are used as the inputs for the workflow.
+This task is based on on publicly available sequencing data from the study "Genomic characterization of Enterobacter sp. PGRG2 and Achromobacter insolitus PGRG5: bacterial strains isolated from soil present near electronics manufacture industry for heavy metal remediation" which focused on generating whole-genome sequence of PGRG5 and the draft genome sequence of PGRG2 strains isolated from electronic waste contaminated soil. Whole genome sequencing was done on both extracted strains where a sequencing library with paired-end reads (2 × 150 bp) was created and subsequently subjected to sequencing on the NovaSeq 6000 platform provided by Illumina (3). For this analysis only PGRG5 strain was used where the fastq forward and reverse reads are used as the inputs for the workflow.
 
 ---
 
 ## 2. How to download
 
-The samples were obtained by first fetching the sample’s SRA record (SRX) on GEO using geofetch, then downloaded the fastq of the selected samples using their corresponding SRR accession.
+The data for the sample is available as raw reads are available at DDBJ/ENA/GenBank under the BioProject with the Bioproject no. PRJNA981674 and SRA accession SRR25007833.
 ### Code for downloading
 
 ```bash
 geofetch -i GSE296035 --just-metadata
-SRRS=("SRX28623476" "	SRX28623471" "SRX28623484")
+SRRS=("SRR25007833")
 
 for SRR in "${SRRS[@]}"; do
     echo "Downloading $SRR ..."
@@ -50,7 +49,7 @@ The workflow files is stored in `workflow/`.
 
 ---
 
-### Step 1 – Alignment stage
+### Step 1 – Quality Check
 
 **Purpose:** The workflow takes each FASTQ file, maps reads to the reference using Bowtie2, converts the alignments to BAM format with Samtools, and deletes the intermediate SAM files.
 **Tools:** `Bowtie2`, `Samtools`
@@ -69,7 +68,7 @@ done
 
 ---
 
-### Step 2 - Quantification
+### Step 2 - Reads Cleaning/Trimming
 
 **Purpose:** This part of the workflow takes all the aligned reads (BAM files), uses the reference annotation (sequence.gtf), and produces a matrix of raw read counts per gene per sample.The output file is used fow downstream differential expression analysis
 **Tools:** 'featureCounts'
@@ -83,7 +82,7 @@ featureCounts -a sequence.gtf -F GTF -o counts_2.txt -T 14 *.bam
 ```
 ---
 
-### Step 3 – Differential gene expression analysis
+### Step 3 – Mapping
 
 **Purpose:** the pipeline loads is done using in R where the raw gene counts are loaded, filter low expression genes, normalizes counts (TMM), calculates rough log2 fold changes, and uses limma-voom to perform proper differential expression testing with statistics (p-values, adjusted p-values)
 **Tools:** 'edgeR','limma'
@@ -168,3 +167,56 @@ fit2 <- eBayes(fit2) # No residual degrees of freedom in linear model fits
 
 
 ```
+### Step 4 - BAM TO SAM AND SORTING
+
+**Purpose:** This part of the workflow takes all the aligned reads (BAM files), uses the reference annotation (sequence.gtf), and produces a matrix of raw read counts per gene per sample.The output file is used fow downstream differential expression analysis
+**Tools:** 'featureCounts'
+**Inputs:** bam files
+**Outputs:** counts matrix (.txt)
+**Command:**
+
+```bash
+featureCounts -a sequence.gtf -F GTF -o counts_2.txt -T 14 *.bam
+
+```
+---
+### Step 5 - Generate Consensus
+
+**Purpose:** This part of the workflow takes all the aligned reads (BAM files), uses the reference annotation (sequence.gtf), and produces a matrix of raw read counts per gene per sample.The output file is used fow downstream differential expression analysis
+**Tools:** 'featureCounts'
+**Inputs:** bam files
+**Outputs:** counts matrix (.txt)
+**Command:**
+
+```bash
+featureCounts -a sequence.gtf -F GTF -o counts_2.txt -T 14 *.bam
+
+```
+---
+
+### Step 6 - Variant Calling
+
+**Purpose:** This part of the workflow takes all the aligned reads (BAM files), uses the reference annotation (sequence.gtf), and produces a matrix of raw read counts per gene per sample.The output file is used fow downstream differential expression analysis
+**Tools:** 'featureCounts'
+**Inputs:** bam files
+**Outputs:** counts matrix (.txt)
+**Command:**
+
+```bash
+featureCounts -a sequence.gtf -F GTF -o counts_2.txt -T 14 *.bam
+
+```
+---
+### Step 7 - De-novo assembly
+
+**Purpose:** This part of the workflow takes all the aligned reads (BAM files), uses the reference annotation (sequence.gtf), and produces a matrix of raw read counts per gene per sample.The output file is used fow downstream differential expression analysis
+**Tools:** 'featureCounts'
+**Inputs:** bam files
+**Outputs:** counts matrix (.txt)
+**Command:**
+
+```bash
+featureCounts -a sequence.gtf -F GTF -o counts_2.txt -T 14 *.bam
+
+```
+---
