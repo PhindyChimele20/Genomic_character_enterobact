@@ -1,0 +1,1 @@
+# Genomic_character_enterobact
