@@ -2,26 +2,26 @@ questions:
   - id: q1
     stage: quality_control
     text: |
-      How many total sequences were flagged for being poor quality?
+      What fraction of sequencing reads passed quality filters (quality score > Q25)?
     answer_type: numeric_percent
   - id: q2
-    stage: alignment
+    stage: trimming
     text: |
-      What is the total number of reads with quality score less than 20?
+      How many reads were retained after quality trimming?
     answer_type: integer_exact
   - id: q3
-    stage: alignment
+    stage: mapping
     text: |
-      What percent of reads uniquely map to the reference genome?
+      What percentage of reads aligned to the reference genome?
     answer_type: numeric_percent
     tolerance: 0.75
   - id: q4
     stage: variant_calling
     text: |
-      How many total variants were found?
+      How many variants (including SNPs and InDels) were detected in the genome?
     answer_type: integer_exact
   - id: q5
-    stage: variant_calling
+    stage: assembly
     text: |
-      How many variant sites have at least 1 alternate allele call?
+      What is the total size of the assembled genome?
     answer_type: integer_exact
