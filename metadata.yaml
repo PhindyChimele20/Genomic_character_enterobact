@@ -1,0 +1,8 @@
+paper_title: Genomic characterization of Enterobacter sp. PGRG2 and Achromobacter insolitus PGRG5: bacterial strains isolated from soil present near electronics manufacture industry for heavy metal remediation
+doi: 10.1128/mra.00617-24
+data_source: "SRA: SRR25007833"
+domain: comparative_genomics
+ref_genome:  Enterobacter sp. SA187 (CP019113.1)
+tools: [fastqc, Trimmomatic v.0.38, m (BWA-mem)v.0.7.17, SAMtools v.0.1.18, BEDTools, SPAdes v.3.7, Prokka v.1.11]
+estimated_runtime_minutes: 170
+estimated_time_for_human: 210
