@@ -44,25 +44,24 @@ CODE TO SUBSAMPLE
 
 ## 4. How the workflow works
 The workflow files is stored in workflow/ and it is divided into different steps:
-DESCRIBE THE WORKFLOW HERE - NOTE THE BELOW ARE JUST EXAMPLES, REPLACE WITH YOUR OWN - YOURS CAN TAKE A VERY DIFFERENT FORMAT
-The workflow files is stored in `workflow/`.
+The workflow files are stored in `workflow/`.
 
 ---
 
 ### Step 1 – Quality Check
 
-**Purpose:** The workflow takes each FASTQ file, maps reads to the reference using Bowtie2, converts the alignments to BAM format with Samtools, and deletes the intermediate SAM files.
-**Tools:** `Bowtie2`, `Samtools`
-**Inputs:** Subsampled FASTQ files (from `data/fastq_subsampled/`)
-**Outputs:** bam and bai files, QC reports (`.html`, `.txt`)
+**Purpose:** The workflow takes each FASTQ.qz file (raw reads), assess the quality of the reads and give the scores and overall stats on the quality of reads.
+**Tools:** `fastqc`
+**Inputs:** Raw reads FASTQ files (from `data/`)
+**Outputs:** quality matrix (html)
 **Command:**
 
 ```bash
-for i in "${samples[@]}"; do
-    bowtie2 -x ref_index -U "${i}.fastq" -S "${i}.sam"
-    samtools view -b "${i}.sam" > "${i}.bam"
-    rm "${i}.sam"
-done
+module load fastqc-0.11.7
+WKD="/data/Microbial_Genomics_PGRG5"
+cd $WKD
+
+fastqc -o "/data/Microbial_Genomics_PGRG5" PGRG5_R1.fq.1 PGRG5_R2.fq.1                                          
 
 ```
 
@@ -70,153 +69,98 @@ done
 
 ### Step 2 - Reads Cleaning/Trimming
 
-**Purpose:** This part of the workflow takes all the aligned reads (BAM files), uses the reference annotation (sequence.gtf), and produces a matrix of raw read counts per gene per sample.The output file is used fow downstream differential expression analysis
-**Tools:** 'featureCounts'
-**Inputs:** bam files
-**Outputs:** counts matrix (.txt)
+**Purpose:** Process reads to get clean, high-quality reads
+**Tools:** 'Trimmomatic'
+**Inputs:** fastq.gz files
+**Outputs:** trimmed fastq.gz files
 **Command:**
 
 ```bash
-featureCounts -a sequence.gtf -F GTF -o counts_2.txt -T 14 *.bam
+#Run Trimmomatic on paired-end reads
+java -jar $TRIMMOMATIC \
+PE -phred33 -validatePairs PGRG5_R1.fq.1 PGRG5_R2.fq.1 PGRG5_R1.trim.fq.1  PGRG5_R1.unpaired.fq.1 PGRG5_R2.trim.fq.1 PGRG5_R2.unpaired.fq.1 LEADING:25 TRAILING:25 SLIDINGWINDOW:4:20 MINLEN:100
 
 ```
 ---
 
 ### Step 3 – Mapping
 
-**Purpose:** the pipeline loads is done using in R where the raw gene counts are loaded, filter low expression genes, normalizes counts (TMM), calculates rough log2 fold changes, and uses limma-voom to perform proper differential expression testing with statistics (p-values, adjusted p-values)
-**Tools:** 'edgeR','limma'
+**Purpose:** the pipeline maps the reads to the reference genome
+**Tools:** 'BWA'
 **Inputs:** count matrix
 **Outputs:** Normalized expression values (CPM), Log2 fold-changes (manual + statistical), differential expression test results ('fit2')
 **Command:**
 ```bash
-#installing edgeR library
-BiocManager::install("edgeR")
-library(edgeR)#importing library
-
-#importing the data, making Geneid the first col, making header true
-counts = read.table("counts.txt",row.names = 1, header=T)
-counts<-counts[, -(1:5)]# removing irrelevant columns
-dge <- DGEList(counts = counts)
-
-# Convert to CPM
-cpm_counts <- cpm(dge)
-
-# Keep genes with at least 1 CPM for all samples
-keep <- rowSums(cpm_counts >= 1) == 3
-dge <- dge[keep, , keep.lib.sizes=FALSE]
-
-# TMM normalisation
-dge <- calcNormFactors(dge, method="TMM")
-###############################################
-# Define columns for each group (updating sample names from metadata)
-# Rename columns of counts
-colnames(counts) <- c("M_G1", "S", "G2")
-colnames(counts)
-
-norm_counts <- cpm(dge, normalized.lib.sizes = TRUE)
-
-# Mean log2 expression per group
-mean_MG1 <- rowMeans(log2(norm_counts[, M_G1,drop = FALSE] + 1))
-mean_S   <- rowMeans(log2(norm_counts[, S,drop = FALSE] + 1))
-mean_G2  <- rowMeans(log2(norm_counts[, G2,drop = FALSE] + 1))
-
-# Calculate log2 fold changes
-log2FC_MG1_vs_S  <- mean_MG1 - mean_S
-log2FC_S_vs_G2   <- mean_S   - mean_G2
-log2FC_G2_vs_MG1 <- mean_G2  - mean_MG1
-
-# Combine into one results table, keeping the same index as norm_counts
-results <- data.frame(
-  log2FC_MG1_vs_S  = log2FC_MG1_vs_S,
-  log2FC_S_vs_G2   = log2FC_S_vs_G2,
-  log2FC_G2_vs_MG1 = log2FC_G2_vs_MG1
-)
-
-# Preserve the gene IDs as rownames
-rownames(results) <- rownames(norm_counts)
-
-head(results)
-##############
-library(limma)
-
-# --- Define sample groups ---
-# Replace these with the actual sample labels in your counts table
-group <- factor(c(rep("M_G1", 1), rep( "S", 1), rep("G2", 1)))
-
-# --- Design matrix ---
-design<- model.matrix(~0 + group)
-colnames(design) <- levels(group)
-
-# --- Transform counts with voom ---
-v <- voom(dge, design, plot = FALSE)
-
-# --- Fit linear model ---
-fit <- lmFit(v, design)
-
-# --- Define contrasts ---
-contrasts <- makeContrasts(
-  M_G1_vs_S  = M_G1 - S,
-  S_vs_G2    = S - G2,
-  G2_vs_M_G1 = G2 - M_G1,
-  levels = design
-)
-
-fit2 <- contrasts.fit(fit, contrasts)
-fit2 <- eBayes(fit2) # No residual degrees of freedom in linear model fits
-
+bwa mem -t 16 Reference.fna PGRG5_R1.trim.fq.1 PGRG5_R2.trim.fq.1 > Mapped.sam
 
 ```
 ### Step 4 - BAM TO SAM AND SORTING
 
-**Purpose:** This part of the workflow takes all the aligned reads (BAM files), uses the reference annotation (sequence.gtf), and produces a matrix of raw read counts per gene per sample.The output file is used fow downstream differential expression analysis
-**Tools:** 'featureCounts'
-**Inputs:** bam files
-**Outputs:** counts matrix (.txt)
+**Purpose:** This part of the workflow converts the .sam file to .bam file the sorts it and index the bam file
+**Tools:** 'Samtools'
+**Inputs:** .sam file
+**Outputs:** .bam file, .bam.bai file
 **Command:**
 
 ```bash
-featureCounts -a sequence.gtf -F GTF -o counts_2.txt -T 14 *.bam
+samtools view -b Mapped.sam > Mapped.bam
+samtools sort -@ 4 -o Mapped.sorted.bam Mapped.bam
+samtools index Mapped.sorted.bam
+
 
 ```
 ---
 ### Step 5 - Generate Consensus
 
-**Purpose:** This part of the workflow takes all the aligned reads (BAM files), uses the reference annotation (sequence.gtf), and produces a matrix of raw read counts per gene per sample.The output file is used fow downstream differential expression analysis
-**Tools:** 'featureCounts'
-**Inputs:** bam files
-**Outputs:** counts matrix (.txt)
+**Purpose:** This part of the workflow takes the mapped sorted bam file and generate a gap consensus genome
+**Tools:** 'samtools'
+**Inputs:** bam file
+**Outputs:** .fa file
 **Command:**
 
 ```bash
-featureCounts -a sequence.gtf -F GTF -o counts_2.txt -T 14 *.bam
+samtools consensus -f fasta -o consensus.fa Mapped.sorted.bam
 
 ```
 ---
 
 ### Step 6 - Variant Calling
 
-**Purpose:** This part of the workflow takes all the aligned reads (BAM files), uses the reference annotation (sequence.gtf), and produces a matrix of raw read counts per gene per sample.The output file is used fow downstream differential expression analysis
-**Tools:** 'featureCounts'
-**Inputs:** bam files
-**Outputs:** counts matrix (.txt)
+**Purpose:** This part of the workflow uses bcftools to identify SNPs and Indels from the sorted bam file of the mapping, index the generated vcf file with snps then filter the snps.The variants 
+are then annotated using bedtools
+**Tools:** 'bcftools', 'bedtools'
+**Inputs:** sorted bam file
+**Outputs:** .vcf.gz file
 **Command:**
 
 ```bash
-featureCounts -a sequence.gtf -F GTF -o counts_2.txt -T 14 *.bam
+REFERENCE="Reference.fna"
+BAM="Mapped.sorted.bam"
+#variant calling
+bcftools mpileup -f $REFERENCE $BAM | bcftools call --ploidy 1 -mv -Oz -o variants.vcf.gz 
+
+bcftools index variants.vcf.gz
+
+bcftools filter -i 'AF>0.25' variants.vcf.gz -Oz -o filtered_variants.vcf.gz
+#Variant annotation
+bcftools query -f '%CHROM\t%POS0\t%POS\t%ID\n' filtered_variants.vcf.gz > variants.bed
+bedtools intersect -a variants.bed -b features.bed -wa -wb > annotated_variants.txt
 
 ```
 ---
 ### Step 7 - De-novo assembly
 
-**Purpose:** This part of the workflow takes all the aligned reads (BAM files), uses the reference annotation (sequence.gtf), and produces a matrix of raw read counts per gene per sample.The output file is used fow downstream differential expression analysis
-**Tools:** 'featureCounts'
-**Inputs:** bam files
-**Outputs:** counts matrix (.txt)
+**Purpose:** This part of the workflow makes a de novo assembly using spaded and then prokka is used for contig annotation
+**Tools:** 'Spades', 'Prokka'
+**Inputs:** .fq file
+**Outputs:** .fasta
 **Command:**
 
 ```bash
-featureCounts -a sequence.gtf -F GTF -o counts_2.txt -T 14 *.bam
+spades.py -1 PGRG5_R1.fq -2 PGRG5_R2.fq --isolate -o spades_output -t 4
+
+prokka spades_output/contigs.fasta --outdir prokka_output --prefix PGRG5
+
 
 ```
 ---
